@@ -1,9 +1,9 @@
 # Things added
-Created a proper module so I could test region generation model within other pipelines
+Created a proper module so I could test region generation model within other pipelines. Moved files around, used click and poetry.
 
 run command
 ```
-python multidiffusion/region_based.py --mask_paths="pano_pattern.png" --bg_prompt="An alien landscape" --fg_prompts="rocket ship" --sd_version="1.5"
+python multidiffusion/region_based.py --mask_paths "pano_pattern.png" --bg_prompt "An alien landscape" --fg_prompts "rocket ship" --fg_negative "poor quality" --sd_version "1.5"
 ```
 
 # MultiDiffusion: Fusing Diffusion Paths for Controlled Image Generation (ICML 2023)
