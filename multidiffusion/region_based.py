@@ -10,7 +10,7 @@ import torchvision.transforms as T
 import argparse
 import numpy as np
 from PIL import Image
-
+import click
 
 def seed_everything(seed):
     torch.manual_seed(seed)
@@ -115,7 +115,7 @@ class MultiDiffusion(nn.Module):
         text_embeds = self.get_text_embeds(prompts, negative_prompts)  # [2 * len(prompts), 77, 768]
 
         # Define panorama grid and get views
-        latent = torch.randn((1, self.unet.in_channels, height // 8, width // 8), device=self.device)
+        latent = torch.randn((1, self.unet.config.in_channels, height // 8, width // 8), device=self.device)
         noise = latent.clone().repeat(len(prompts) - 1, 1, 1, 1)
         views = get_views(height, width)
         count = torch.zeros_like(latent)
@@ -172,7 +172,7 @@ def preprocess_mask(mask_path, h, w, device):
     mask = torch.nn.functional.interpolate(mask, size=(h, w), mode='nearest')
     return mask
 
-
+"""
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--mask_paths', type=list)
@@ -190,6 +190,8 @@ if __name__ == '__main__':
     # bootstrapping encourages high fidelity to tight masks, the value can be lowered is most cases
     parser.add_argument('--bootstrapping', type=int, default=20)
     opt = parser.parse_args()
+
+    print('opt', opt)
 
     seed_everything(opt.seed)
 
@@ -209,3 +211,44 @@ if __name__ == '__main__':
 
     # save image
     img.save('out.png')
+"""
+
+@click.command()
+@click.option('--mask_paths', type=str, multiple=True, required=True, help="List of mask paths")
+@click.option('--bg_prompt', type=str, required=True, help="Background prompt")
+@click.option('--bg_negative', type=str, required=False, default="poor quality", help="Negative prompt for background")
+@click.option('--fg_prompts', type=str, multiple=True, required=True, help="List of foreground prompts")
+@click.option('--fg_negative', type=str, multiple=True, required=False, help="List of negative prompts for foreground")
+@click.option('--sd_version', type=click.Choice(['1.5', '2.0']), default='2.0', help="Stable Diffusion version")
+@click.option('--h', type=int, default=768, help="Height of the output image")
+@click.option('--w', type=int, default=512, help="Width of the output image")
+@click.option('--seed', type=int, default=0, help="Random seed")
+@click.option('--steps', type=int, default=50, help="Number of diffusion steps")
+@click.option('--bootstrapping', type=int, default=20, help="Bootstrapping value for mask fidelity")
+def main(mask_paths, bg_prompt, bg_negative, fg_prompts, fg_negative, sd_version, h, w, seed, steps, bootstrapping):
+    print('Options:', locals())
+
+    # Set the seed for reproducibility
+    seed_everything(seed)
+
+    # Initialize the device and model
+    device = torch.device('cuda')
+    sd = MultiDiffusion(device, sd_version)
+
+    # Preprocess masks
+    fg_masks = torch.cat([preprocess_mask(mask_path, h // 8, w // 8, device) for mask_path in mask_paths])
+    bg_mask = 1 - torch.sum(fg_masks, dim=0, keepdim=True)
+    bg_mask[bg_mask < 0] = 0
+    masks = torch.cat([bg_mask, fg_masks])
+
+    # Combine background and foreground prompts
+
+    prompts = [bg_prompt] + list(fg_prompts)
+    neg_prompts = [bg_negative] + list(fg_negative)
+
+    # Generate and save the image
+    img = sd.generate(masks, prompts, neg_prompts, h, w, steps, bootstrapping=bootstrapping)
+    img.save('out.png')
+
+if __name__ == '__main__':
+    main()

@@ -1,5 +1,5 @@
 torch
 torchvision
-diffusers==0.20.1
+diffusers
 transformers
 tqdm
